@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -Wall
+    - -Wextra
+    - -I/opt/homebrew/include
+    - -I/opt/homebrew/include/SDL2
