@@ -24,7 +24,7 @@ int main() {
 		.window=NULL, 
 		.gl_context=NULL, 
 		.running=true, 
-		.objects={.next_id = 0}, 
+		.objects={.display_radius = 20.0, .next_id = 0}, 
 		.relationships={.next_id = 0}, 
 		.next_id=0,
 		.draw_info = {.user_state = VOID, .left_width = 200.0f}

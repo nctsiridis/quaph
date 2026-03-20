@@ -2,66 +2,139 @@
 
 // STATE RELATED
 
+bool on_left_side(ImVec2 cursor_pos, DrawInfo& draw_info) {
+	return cursor_pos.x < draw_info.left_width;
+}
+
+bool on_right_side(ImVec2 cursor_pos, DrawInfo& draw_info) {
+	return cursor_pos.x > draw_info.left_width;
+}
+
+bool near_object(ImVec2 pos, int i, Objects& objects, float radius) {
+	float x = objects.xs[i], y = objects.ys[i];
+	float dx = x - pos.x, dy = y - pos.y;
+	float dist = sqrt(dx*dx + dy*dy);
+	return dist < radius;
+}
+
+bool near_object_by_id(ImVec2 pos, int object_id, Objects& objects, float radius) {
+	int i = objects.id_to_index[object_id];
+	return near_object(pos, i, objects, radius);
+}
+
+int near_any_object(ImVec2 pos, DrawInfo& draw_info, Objects& objects, float radius) {
+	for (int i = 0; i < objects.ids.size(); i++) {
+		if (near_object(pos, i, objects, radius)) return i;
+	}
+	return -1;
+}
+
+bool within_bounds_of_object_by_id(
+	int object_id, ImVec2 pos, DrawInfo& draw_info, 
+	Objects& objects, float inner, float outer
+) {
+	int i = objects.id_to_index[object_id];
+	float x = objects.xs[i], y = objects.ys[i];
+	float dx = x - pos.x, dy = y - pos.y;
+	float dist = sqrt(dx*dx + dy*dy);
+	return dist < outer && dist > inner;
+}
+
 int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relationship) {
-
 	draw_info.total_width = ImGui::GetContentRegionAvail().x;
-
-	UserState& state = draw_info.user_state;
 	ImVec2 cursor_pos = ImGui::GetMousePos();
 
-	if (state == UserState::VOID) {
+	if (draw_info.user_state == UserState::VOID) {
 		// not committed to either side of screen
 
-		if (cursor_pos.x > draw_info.left_width) {
-			state = UserState::GRAPH_HOVER_VOID;
+		if (on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::GRAPH_HOVER_VOID;
 			printf("switched to graph\n");
-		} else if (cursor_pos.x < draw_info.left_width) {
-			state = UserState::INFO_HOVER_VOID;
+		} else if (on_left_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::INFO_HOVER_VOID;
 			printf("switched to info\n");
 		}
-	} else if (state == GRAPH_HOVER_VOID) {
+	} else if (draw_info.user_state == GRAPH_HOVER_VOID) {
 		// hovering on nothing on graph side of screen
 
-		if (cursor_pos.x <= draw_info.left_width) {
-			state = UserState::VOID;
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if ((draw_info.object_id = near_any_object(
+			cursor_pos, 
+			draw_info, 
+			objects, 
+			objects.display_radius
+		)) >= 0) {
+			draw_info.user_state = UserState::GRAPH_HOVER_OBJECT;
+			printf("switched to graph hover object\n");
+		} else if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+			draw_info.user_state = UserState::GRAPH_LEFT_DOWN_VOID;
+			printf("switch to graph left down void\n");
+		} else if ((draw_info.object_id = near_any_object(
+			cursor_pos, 
+			draw_info, 
+			objects, 
+			objects.display_radius + 20
+		)) >= 0) {
+			draw_info.user_state = UserState::GRAPH_HOVER_NEAR_OBJECT;
+			printf("switched to hover near object\n");
+		}
+	} else if (draw_info.user_state == UserState::INFO_HOVER_VOID) {
+		// hovering on info side of screen
+
+		if (!on_left_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		}
+	} else if (draw_info.user_state == UserState::GRAPH_HOVER_OBJECT) {
+		// hovering over object on graph
+
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if (!near_object_by_id(
+			cursor_pos, 
+			draw_info.object_id, 
+			objects, objects.display_radius
+		)) {
+			draw_info.user_state = UserState::VOID;
 			printf("switched to void\n");
 		} else if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			bool found = false;
-			for (int i = 0; i < objects.ids.size(); i++) {
-				float x = objects.xs[i], y = objects.ys[i];
-				float dx = x - cursor_pos.x, dy = y - cursor_pos.y;
-				float dist = sqrt(dx*dx + dy*dy);
-				if (dist < 20.0) {
-					draw_info.object_id = objects.ids[i];
-					state = GRAPH_LEFT_DOWN_OBJECT;
-					printf("switched to graph left down object\n");
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				state = GRAPH_LEFT_DOWN_VOID;
-				printf("switched to graph left down void\n");
-			}
-		} else {
-			// nothing to do on graph hover void
+			draw_info.user_state = UserState::GRAPH_LEFT_DOWN_OBJECT;
+			printf("switched to graph left down object\n");
 		}
-	} else if (state == UserState::INFO_HOVER_VOID) {
-		std::cout << "posX: " << cursor_pos.x << std::endl;
-		if (cursor_pos.x >= draw_info.left_width) {
-			state = UserState::VOID;
+	} else if (draw_info.user_state == UserState::GRAPH_HOVER_NEAR_OBJECT) {
+		// graph hover near object
+
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if (!within_bounds_of_object_by_id(
+			draw_info.object_id, cursor_pos, draw_info, objects,
+			objects.display_radius, objects.display_radius + 20
+		)) {
+			draw_info.user_state = UserState::VOID;
 			printf("switched to void\n");
 		}
-	} else if (state == UserState::GRAPH_LEFT_DOWN_VOID) {
-		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-			state = UserState::VOID;
+	} else if (draw_info.user_state == UserState::GRAPH_LEFT_DOWN_VOID) {
+		// left mouse down on void on graph
+
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+			draw_info.user_state = UserState::VOID;
 			printf("switched to void\n");
 		}
-	} else if (state == UserState::GRAPH_LEFT_DOWN_OBJECT) {
+	} else if (draw_info.user_state == UserState::GRAPH_LEFT_DOWN_OBJECT) {
 		// left mouse button down on graph object
 
-		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-			state = UserState::VOID;
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+			draw_info.user_state = UserState::VOID;
 			printf("switched to void\n");
 		} else {
 			int index = objects.id_to_index[draw_info.object_id];
@@ -131,7 +204,7 @@ int draw_info_window(float total_width, float left_width) {
 
 int draw_objects(Objects& objects, ImDrawList* graph_draw_list) {
 	for (int i = 0; i < objects.ids.size(); i++) {
-		float radius = 20.0f;
+		float radius = objects.display_radius;
 		ImU32 color = IM_COL32(255, 0, 0, 255);
 		ImVec2 center = ImVec2((float)objects.xs[i], (float)objects.ys[i]);
 
@@ -140,34 +213,25 @@ int draw_objects(Objects& objects, ImDrawList* graph_draw_list) {
 	return 0;
 }
 
-int draw_relationship_builder(Objects& objects, ImDrawList *graph_draw_list) {
+int draw_relationship_builder_hover(
+	int object_id, Objects& objects, ImDrawList *graph_draw_list
+) {
+	int index = objects.id_to_index[object_id];
+	float x = objects.xs[index], y = objects.ys[index];
 	ImVec2 mouse_pos = ImGui::GetMousePos();
+	float dx = x - mouse_pos.x, dy = y - mouse_pos.y;
+	float dist = sqrt(dx*dx + dy*dy);
 
-	float mn_prox = 50;
-	float mn_dist = MAXFLOAT;
-	int best_x = -1, best_y = -1;
-
-	for (int i = 0; i < objects.ids.size(); i++) {
-		int x = objects.xs[i], y = objects.ys[i];
-		float dx = x - mouse_pos.x, dy = y - mouse_pos.y;
-		float dist = std::sqrt((dx*dx + dy*dy));
-		if (dist < mn_dist && dist < mn_prox) {
-			mn_dist = dist;
-			best_x = x;
-			best_y = y;
-		}
-	}
-
-	if (best_x >= 0 && best_y >= 0) {
+	if (x >= 0 && y >= 0) {
 		ImU32 color = IM_COL32(0, 255, 0, 255);
 
-		float vx = mouse_pos.x - (float)best_x;
-		float vy = mouse_pos.y - (float)best_y;
-		vx /= mn_dist / 20;
-		vy /= mn_dist / 20;
+		float vx = mouse_pos.x - x;
+		float vy = mouse_pos.y - y;
+		vx /= dist / 20;
+		vy /= dist / 20;
 		
 		graph_draw_list->AddCircleFilled(
-			ImVec2((float)best_x + vx, (float)best_y + vy), 
+			ImVec2(x + vx, y + vy), 
 			3, color, 0
 		);
 	}
@@ -182,7 +246,6 @@ int draw_graph_window(DrawInfo& draw_info, Objects& objects) {
 		if (ImGui::MenuItem("New Object")) {
 			ImVec2 click_pos = ImGui::GetMousePos();
 			create_object(
-				objects.next_id++, 
 				(int) click_pos.x, 
 				(int) click_pos.y, 
 				objects
@@ -199,8 +262,8 @@ int draw_graph_window(DrawInfo& draw_info, Objects& objects) {
 	}
 
 	draw_objects(objects, graph_draw_list);
-	if (draw_info.user_state == UserState::GRAPH_HOVER_VOID)
-		draw_relationship_builder(objects, graph_draw_list);
+	if (draw_info.user_state == UserState::GRAPH_HOVER_NEAR_OBJECT)
+		draw_relationship_builder_hover(draw_info.object_id, objects, graph_draw_list);
 	// draw_relationships();
 	return 0;
 }

@@ -10,6 +10,7 @@ struct Objects {
 	std::vector<int> xs;
 	std::vector<int> ys;
 	std::unordered_map<int, int> id_to_index;
+	float display_radius;
 	int next_id;
 	// std::vector<int> schemas;
 	// std::vector<std::string> data;
@@ -27,7 +28,7 @@ struct Relationships {
 	// std::vector<std::string> data;
 };
 
-int create_object(int id, int x, int y, Objects& objects);
+int create_object(int x, int y, Objects& objects);
 int remove_object(int id, Objects& objects);
-int create_relationship(int id, int from, int to, Relationships& relationships);
+int create_relationship(int from, int to, Relationships& relationships);
 int remove_relationship(int id, Relationships& relationships);
