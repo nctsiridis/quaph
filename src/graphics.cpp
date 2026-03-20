@@ -176,6 +176,22 @@ int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relat
 			printf("switched to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 			draw_info.user_state = UserState::VOID;
+			printf("switched to void, graph item clicked!\n");
+		} else if (!near_object_by_id(
+			cursor_pos, 
+			draw_info.object_id, 
+			objects, 
+			objects.display_radius
+		)) {
+			draw_info.user_state = UserState::GRAPH_DRAGGING_OBJECT;
+			printf("switched to object dragging mode\n");
+		}
+	} else if (draw_info.user_state == UserState::GRAPH_DRAGGING_OBJECT) {
+		if (!on_right_side(cursor_pos, draw_info)) {
+			draw_info.user_state = UserState::VOID;
+			printf("switched to void\n");
+		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+			draw_info.user_state = UserState::VOID;
 			printf("switched to void\n");
 		} else {
 			int index = objects.id_to_index[draw_info.object_id];
