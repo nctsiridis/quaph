@@ -6,6 +6,8 @@ int create_object(int id, int x, int y, Objects& objects) {
 	objects.timestamps.push_back(timestamp);
 	objects.xs.push_back(x);
 	objects.ys.push_back(y);
+	objects.id_to_index[id] = objects.ids.size() - 1;
+	objects.next_id++;
 	return 0;
 }
 
@@ -32,6 +34,8 @@ int create_relationship(int id, int from, int to, Relationships& relationships) 
 	relationships.timestamps.push_back(timestamp);
 	relationships.from.push_back(from);
 	relationships.to.push_back(to);
+	relationships.id_to_index[id] = relationships.ids.size() - 1;
+	relationships.next_id++;
 	return 0;
 }
 

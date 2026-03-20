@@ -10,6 +10,7 @@ struct Objects {
 	std::vector<int> xs;
 	std::vector<int> ys;
 	std::unordered_map<int, int> id_to_index;
+	int next_id;
 	// std::vector<int> schemas;
 	// std::vector<std::string> data;
 	// std::vector<std::vector<std::string>> attachments;
@@ -21,6 +22,7 @@ struct Relationships {
 	std::vector<int> from;
 	std::vector<int> to;
 	std::unordered_map<int, int> id_to_index;
+	int next_id;
 	// std::vector<int> schema;
 	// std::vector<std::string> data;
 };

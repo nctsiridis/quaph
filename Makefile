@@ -11,7 +11,8 @@ SRC= external/imgui-1.92.6/backends/imgui_impl_sdl2.cpp \
 	external/imgui-1.92.6/imgui_demo.cpp \
 	src/quaph.cpp \
 	src/setup.cpp \
-	src/util.cpp
+	src/util.cpp \
+	src/graphics.cpp
 
 OUT= build/program
 WASM_OUT= build/program.html

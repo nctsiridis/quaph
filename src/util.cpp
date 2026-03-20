@@ -12,3 +12,7 @@ std::string get_timestamp() {
 	std::tm tm = *std::localtime(&t);
 	return tm_to_string(tm);
 }
+
+bool in_region(float x, float y, float x_top, float x_bottom, float y_right, float y_left) {
+	return x <= x_top && x >= x_bottom && y <= y_right && y >= y_left;
+}
