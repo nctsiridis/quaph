@@ -31,6 +31,7 @@ enum UserState {
 struct DrawInfo {
 	UserState user_state;
 	int object_id;
+	int object_id2;
 	float total_width, left_width;
 	ImVec2 cursor_pos;
 	ImVec2 draw_line_from, draw_line_to;
