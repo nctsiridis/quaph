@@ -3,7 +3,7 @@
 #include <iostream>
 #include <stdio.h>
 
-#include "graphics.hpp"
+#include "state.hpp"
 #include "draw.hpp"
 
 #ifdef __EMSCRIPTEN__

@@ -4,7 +4,7 @@
 #include "../external/imgui-1.92.6/backends/imgui_impl_sdl2.h"
 #include "../external/imgui-1.92.6/backends/imgui_impl_opengl3.h"
 
-#include "graphics.hpp"
+#include "state.hpp"
 #include "quaph.hpp"
 
 #include <SDL.h>

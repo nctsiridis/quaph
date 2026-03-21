@@ -12,7 +12,7 @@ SRC= external/imgui-1.92.6/backends/imgui_impl_sdl2.cpp \
 	src/quaph.cpp \
 	src/setup.cpp \
 	src/util.cpp \
-	src/graphics.cpp \
+	src/state.cpp \
 	src/draw.cpp
 
 OUT= build/program
