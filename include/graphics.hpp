@@ -14,7 +14,7 @@
 #include <SDL_opengl.h>
 #endif
 
-enum UserState {
+enum UserState { // GRAPH STATE
 	VOID,
 	GRAPH_HOVER_VOID,
 	GRAPH_HOVER_OBJECT,
@@ -26,17 +26,25 @@ enum UserState {
 	GRAPH_LEFT_DOWN_RELATIONSHIP,
 	GRAPH_DRAWING_LINE,
 	GRAPH_DRAWING_LINE_CONNECTED,
-	INFO_HOVER_VOID
+	INFO_HOVER_VOID // REMOVE
 };
 
 struct DrawInfo {
-	UserState user_state;
-	int object_id;
-	int object_id2;
+	UserState user_state; // TODO user_state != graph state
+	int object_id, object_id2;
 	float total_width, left_width;
 	ImVec2 cursor_pos;
 	ImVec2 draw_line_from, draw_line_to;
-};
+
+	ImVec2 screen_dimensions;
+	ImVec2 world_dimensions;
+	ImVec2 view_offset;
+	float x_scale_factor; // what percentage of world_x is view_x
+	// graph_world_width, graph_world_height
+	// graph_view_width, graph_view_height ! given by ImGui
+	// graph_view_x, graph_view_y
+	// zoom // (x axis scale factor)
+}; 
 
 int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relationship);
 int start_frames();

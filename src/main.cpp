@@ -24,10 +24,16 @@ int main() {
 		.window=NULL, 
 		.gl_context=NULL, 
 		.running=true, 
-		.objects={.display_radius = 20.0, .next_id = 0}, 
+		.objects={.true_radius = 20.0, .next_id = 0}, 
 		.relationships={.next_id = 0}, 
 		.next_id=0,
-		.draw_info = {.user_state = VOID, .left_width = 200.0f}
+		.draw_info = {
+			.world_dimensions=ImVec2(1000.0f, 1000.0f), 
+			.view_offset=ImVec2(0, 0),
+			.x_scale_factor=0.5,
+			.user_state=VOID, 
+			.left_width=200.0f
+		}
 	};
 	SDL_Window *window;
 	SDL_GLContext gl_context;

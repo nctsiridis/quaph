@@ -2,6 +2,26 @@
 
 // STATE RELATED
 
+ImVec2 display_to_true(DrawInfo& draw_info, ImVec2 pos) {
+	float ratio = draw_info.screen_dimensions.y / draw_info.screen_dimensions.y;
+	
+	// size of screen in terms of world dimensions
+	float view_x = draw_info.x_scale_factor * draw_info.world_dimensions.x;
+	float view_y = ratio * view_x;
+
+	float click_ratio_x = pos.x / draw_info.screen_dimensions.x;
+	float click_ratio_y = pos.y / draw_info.screen_dimensions.y;
+
+	float dx = view_x * click_ratio_x;
+	float dy = view_y * click_ratio_y;
+
+	float true_x = draw_info.view_offset.x + dx;
+	float true_y = draw_info.view_offset.y + dy;
+
+	return ImVec2(true_x, true_y);
+
+}
+
 bool on_left_side(ImVec2 cursor_pos, DrawInfo& draw_info) {
 	return cursor_pos.x < draw_info.left_width;
 }
@@ -11,7 +31,7 @@ bool on_right_side(ImVec2 cursor_pos, DrawInfo& draw_info) {
 }
 
 bool near_object(ImVec2 pos, int i, Objects& objects, float radius) {
-	float x = objects.xs[i], y = objects.ys[i];
+	float x = objects.display_xs[i], y = objects.display_ys[i];
 	float dx = x - pos.x, dy = y - pos.y;
 	float dist = sqrt(dx*dx + dy*dy);
 	return dist < radius;
@@ -41,14 +61,14 @@ bool within_bounds_of_object_by_id(
 	Objects& objects, float inner, float outer
 ) {
 	int i = objects.id_to_index[object_id];
-	float x = objects.xs[i], y = objects.ys[i];
+	float x = objects.display_xs[i], y = objects.display_ys[i];
 	float dx = x - pos.x, dy = y - pos.y;
 	float dist = sqrt(dx*dx + dy*dy);
 	return dist < outer && dist > inner;
 }
 
 int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relationships) {
-	draw_info.total_width = ImGui::GetContentRegionAvail().x;
+	draw_info.total_width = ImGui::GetIO().DisplaySize.x;
 	ImVec2 cursor_pos = ImGui::GetMousePos();
 
 	if (draw_info.user_state == UserState::VOID) {
@@ -195,8 +215,11 @@ int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relat
 			printf("switched to void\n");
 		} else {
 			int index = objects.id_to_index[draw_info.object_id];
-			objects.xs[index] = cursor_pos.x;
-			objects.ys[index] = cursor_pos.y;
+			objects.display_xs[index] = cursor_pos.x;
+			objects.display_ys[index] = cursor_pos.y;
+			ImVec2 true_pos = display_to_true(draw_info, cursor_pos);
+			objects.true_xs[index] = true_pos.x;
+			objects.true_ys[index] = true_pos.y;
 		}
 	}
 	return 0;
@@ -235,24 +258,28 @@ int sdl_event_loop(bool& running) {
 	return 0;
 }
 
-int draw_info_window(float total_width, float left_width) {
+int draw_info_window(DrawInfo& draw_info) {
 
-	ImGui::BeginChild("left", ImVec2(left_width, 0), true);
+	ImGui::BeginChild(
+		"left", 
+		ImVec2(draw_info.left_width, 0), 
+		true
+	);
 	// ImGui::Text("Left view");
 	ImGui::EndChild();
 
 	ImGui::SameLine();
 
-	ImGui::InvisibleButton("splitter", ImVec2(4, -1));
+	ImGui::InvisibleButton("splitter", ImVec2(10, -1));
 	if (ImGui::IsItemActive())
-		left_width += ImGui::GetIO().MouseDelta.x;
+		draw_info.left_width += ImGui::GetIO().MouseDelta.x;
 
 	if (ImGui::IsItemHovered())
 		ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
 
 	float min_width = 100.0f;
-	float max_width = total_width - 100.0f;
-	left_width = std::clamp(left_width, min_width, max_width);
+	float max_width = draw_info.total_width - 100.0f;
+	draw_info.left_width = std::clamp(draw_info.left_width, min_width, max_width);
 
 	ImGui::SameLine();
 
@@ -263,7 +290,7 @@ int draw_objects(Objects& objects, ImDrawList *graph_draw_list) {
 	for (int i = 0; i < objects.ids.size(); i++) {
 		float radius = objects.display_radius;
 		ImU32 color = IM_COL32(255, 0, 0, 255);
-		ImVec2 center = ImVec2((float)objects.xs[i], (float)objects.ys[i]);
+		ImVec2 center = ImVec2((float)objects.display_xs[i], (float)objects.display_ys[i]);
 
 		graph_draw_list->AddCircle(center, radius, color, 0, 2.0f);
 	}
@@ -272,14 +299,14 @@ int draw_objects(Objects& objects, ImDrawList *graph_draw_list) {
 
 ImVec2 get_nearest_point_on_object(ImVec2 pos, int object_id, Objects& objects) {
 	int index = objects.id_to_index[object_id];
-	float x = objects.xs[index], y = objects.ys[index];
+	float x = objects.display_xs[index], y = objects.display_ys[index];
 	float dx = x - pos.x, dy = y - pos.y;
 	float dist = sqrt(dx*dx + dy*dy);
 
 	float vx = pos.x - x;
 	float vy = pos.y - y;
-	vx /= dist / 20;
-	vy /= dist / 20;
+	vx /= dist / objects.display_radius;
+	vy /= dist / objects.display_radius;
 
 	return ImVec2(x + vx, y + vy);
 }
@@ -311,14 +338,14 @@ int draw_relationship_builder_down(
 
 std::pair<ImVec2, ImVec2> get_nearest_point_pair(int object_id, int object_id2, Objects& objects) {
 	int i1 = objects.id_to_index[object_id];
-	float x1 = objects.xs[i1], y1 = objects.ys[i1];
+	float x1 = objects.display_xs[i1], y1 = objects.display_ys[i1];
 	ImVec2 p2 = get_nearest_point_on_object(
 		ImVec2(x1, y1), 
 		object_id2, objects
 	);
 
 	int i2 = objects.id_to_index[object_id2];
-	float x2 = objects.xs[i2], y2 = objects.ys[i2];
+	float x2 = objects.display_xs[i2], y2 = objects.display_ys[i2];
 	ImVec2 p1 = get_nearest_point_on_object(
 		ImVec2(x2, y2), 
 		object_id, objects
@@ -361,17 +388,26 @@ int draw_relationships(Relationships& relationships, Objects& objects, ImDrawLis
 }
 
 int draw_graph_window(DrawInfo& draw_info, Objects& objects, Relationships& relationships) {
+
 	ImGui::BeginChild("right", ImVec2(0, 0), true);
+
+	//draw world border 
+
 	// ImGui::Text("Right view");
 	ImDrawList *graph_draw_list = ImGui::GetWindowDrawList();
 	if (ImGui::BeginPopupContextWindow("context", ImGuiPopupFlags_MouseButtonRight)) {
 		if (ImGui::MenuItem("New Object")) {
 			ImVec2 click_pos = ImGui::GetMousePos();
+			ImVec2 true_pos = display_to_true(draw_info, click_pos);
+
 			create_object(
-				(int) click_pos.x, 
-				(int) click_pos.y, 
+				true_pos.x, 
+				true_pos.y, 
+				click_pos.x, 
+				click_pos.y, 
 				objects
 			);
+
 			printf("added object\n");
 		}
 		/*
@@ -391,16 +427,60 @@ int draw_graph_window(DrawInfo& draw_info, Objects& objects, Relationships& rela
 	} else if (draw_info.user_state == UserState::GRAPH_DRAWING_LINE) {
 		draw_relationship_builder_down(draw_info.object_id, objects, graph_draw_list);
 	} else if (draw_info.user_state == UserState::GRAPH_DRAWING_LINE_CONNECTED) {
-		draw_relationship_builder_connected(draw_info.object_id, draw_info.object_id2, objects, graph_draw_list);
+		draw_relationship_builder_connected(
+			draw_info.object_id, 
+			draw_info.object_id2, objects, 
+			graph_draw_list
+		);
+	}
+	return 0;
+}
+
+int update_display_properties(DrawInfo& draw_info, Objects& objects) {
+	// update display radius
+	// what percentage of view is radius?
+
+	// check all objects in view and update them
+	
+	float ratio = draw_info.screen_dimensions.y / draw_info.screen_dimensions.y;
+	float view_x = draw_info.x_scale_factor * draw_info.world_dimensions.x;
+	float view_y = ratio * view_x;
+
+	float radius_percentage = objects.true_radius / view_x;
+	objects.display_radius = radius_percentage * draw_info.screen_dimensions.x;
+
+	for (int i = 0; i < objects.ids.size(); i++) {
+		float x = objects.true_xs[i], y = objects.true_ys[i];
+		float x_delta = x - draw_info.view_offset.x;
+		float y_delta = y - draw_info.view_offset.y;
+
+		if (
+			x_delta >= 0 && x_delta < view_x &&
+			y_delta >= 0 && y_delta < view_x
+		) {
+			float x_ratio = x_delta / view_x;
+			float y_ration = y_delta / view_y;
+
+			objects.display_xs[i] = x_ratio * draw_info.screen_dimensions.x;
+			objects.display_ys[i] = y_ration * draw_info.screen_dimensions.y;
+		}
 	}
 	return 0;
 }
 
 int draw_main_window(int& next_id, DrawInfo& draw_info, Objects& objects, Relationships& relationships) {
+
+	draw_info.screen_dimensions = ImGui::GetIO().DisplaySize;
+
+	update_display_properties(draw_info, objects);
+
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 
 	ImGui::SetNextWindowPos(viewport->Pos);
 	ImGui::SetNextWindowSize(viewport->Size);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
 	ImGuiWindowFlags flags =
 	ImGuiWindowFlags_NoTitleBar |
@@ -412,8 +492,9 @@ int draw_main_window(int& next_id, DrawInfo& draw_info, Objects& objects, Relati
 	
 	ImGui::Begin("Main", NULL, flags);
 
-	draw_info_window(draw_info.total_width, draw_info.left_width);
+	draw_info_window(draw_info);
 	draw_graph_window(draw_info, objects, relationships);
+	ImGui::PopStyleVar(2);
 	ImGui::EndChild();
 	ImGui::End();
 	return 0;

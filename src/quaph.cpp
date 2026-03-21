@@ -1,11 +1,13 @@
 #include "../include/quaph.hpp"
 
-int create_object(int x, int y, Objects& objects) {
+int create_object(float true_x, float true_y, float display_x, float display_y, Objects& objects) {
 	std::string timestamp = get_timestamp();
 	objects.ids.push_back(objects.next_id);
 	objects.timestamps.push_back(timestamp);
-	objects.xs.push_back(x);
-	objects.ys.push_back(y);
+	objects.true_xs.push_back(true_x);
+	objects.true_ys.push_back(true_y);
+	objects.display_xs.push_back(display_x);
+	objects.display_ys.push_back(display_y);
 	objects.id_to_index[objects.next_id] = objects.ids.size() - 1;
 	objects.next_id++;
 	return 0;
@@ -17,13 +19,13 @@ int remove_object(int id, Objects& objects) {
 	int index = objects.id_to_index[id];
 	objects.ids[index] = objects.ids[n - 1];
 	objects.timestamps[index] = objects.timestamps[n - 1];
-	objects.xs[index] = objects.xs[n - 1];
-	objects.ys[index] = objects.ys[n - 1];
+	objects.true_xs[index] = objects.true_xs[n - 1];
+	objects.true_ys[index] = objects.true_ys[n - 1];
 	objects.id_to_index[last_id] = index;
 	objects.ids.pop_back();
 	objects.timestamps.pop_back();
-	objects.xs.pop_back();
-	objects.ys.pop_back();
+	objects.true_xs.pop_back();
+	objects.true_ys.pop_back();
 	objects.id_to_index.erase(id);
 	return 0;
 }
