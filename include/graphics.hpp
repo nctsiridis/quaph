@@ -14,26 +14,25 @@
 #include <SDL_opengl.h>
 #endif
 
-enum UserState { // GRAPH STATE
-	VOID,
-	GRAPH_HOVER_VOID,
-	GRAPH_HOVER_OBJECT,
-	GRAPH_HOVER_RELATIONSHIP,
-	GRAPH_HOVER_NEAR_OBJECT,
-	GRAPH_LEFT_DOWN_VOID,
-	GRAPH_LEFT_DOWN_OBJECT,
-	GRAPH_DRAGGING_OBJECT,
-	GRAPH_LEFT_DOWN_RELATIONSHIP,
-	GRAPH_DRAWING_LINE,
-	GRAPH_DRAWING_LINE_CONNECTED,
-	INFO_HOVER_VOID // REMOVE
+enum class GraphState { // GRAPH STATE
+	NONE,
+	HOVER_VOID,
+	HOVER_OBJECT,
+	HOVER_RELATIONSHIP,
+	HOVER_NEAR_OBJECT,
+	LEFT_DOWN_OBJECT,
+	DRAGGING_OBJECT,
+	DRAGGING_SCREEN,
+	LEFT_DOWN_RELATIONSHIP,
+	DRAWING_LINE,
+	DRAWING_LINE_CONNECTED,
 };
 
-struct DrawInfo {
-	UserState user_state; // TODO user_state != graph state
+struct StateInfo {
+	GraphState graph_state; // TODO user_state != graph state
 	int object_id, object_id2;
-	float total_width, left_width;
-	ImVec2 cursor_pos;
+	float left_split_width;
+	ImVec2 cursor_pos, cursor_pivot;
 	ImVec2 draw_line_from, draw_line_to;
 
 	ImVec2 screen_dimensions;
@@ -46,11 +45,5 @@ struct DrawInfo {
 	// zoom // (x axis scale factor)
 }; 
 
-int update_draw_info(DrawInfo& draw_info, Objects& objects, Relationships& relationship);
-int start_frames();
-int complete_render(SDL_Window *window);
-int sdl_event_loop(bool& running);
-int draw_graph_info(float total_width);
-int draw_objects(Objects& objects, ImDrawList *right_draw_list);
-int draw_graph_window(DrawInfo& draw_info, Objects& objects);
-int draw_main_window(int& next_id, DrawInfo& draw_info, Objects& objects, Relationships& relationships);
+int update_state_info(StateInfo& state_info, Objects& objects, Relationships& relationship);
+ImVec2 display_to_true(StateInfo& state_info, ImVec2 pos);

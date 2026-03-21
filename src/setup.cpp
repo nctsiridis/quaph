@@ -1,5 +1,17 @@
 #include "../include/setup.hpp"
 
+int sdl_event_loop(bool& running) {
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		ImGui_ImplSDL2_ProcessEvent(&event);
+		if (event.type == SDL_QUIT) {
+			running = false;
+			return 0;
+		} 
+	}
+	return 0;
+}
+
 int sdl2_gl3_config(AppData& app_data) {
 
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
@@ -115,5 +127,24 @@ int sdl2_gl3_close(AppData& app_data) {
 	SDL_GL_DeleteContext(app_data.gl_context);
 	SDL_DestroyWindow(app_data.window);
 	SDL_Quit();
+	return 0;
+}
+
+int start_frames() {
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplSDL2_NewFrame();
+	ImGui::NewFrame();
+	return 0;
+}
+
+int complete_render(SDL_Window *window) {
+	ImGui::Render();
+
+	glViewport(0, 0, (int)ImGui::GetIO().DisplaySize.x, (int)ImGui::GetIO().DisplaySize.y);
+	glClearColor(0, 0, 0, 1);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	SDL_GL_SwapWindow(window);
 	return 0;
 }

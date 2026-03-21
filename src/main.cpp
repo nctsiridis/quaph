@@ -2,19 +2,24 @@
 
 void main_loop(void *arg) {
 	AppData *app_data = (AppData*)arg;
+
 	sdl_event_loop(app_data->running);
+
 	start_frames();
-	update_draw_info(
-		app_data->draw_info, 
+
+	update_state_info(
+		app_data->state_info, 
 		app_data->objects, 
 		app_data->relationships
 	);
-	draw_main_window(
-		app_data->next_id, 
-		app_data->draw_info, 
+
+	draw_all(
+		app_data->state_info, 
 		app_data->objects, 
-		app_data->relationships
+		app_data->relationships, 
+		app_data->window
 	);
+
 	complete_render(app_data->window);
 }
 
@@ -27,12 +32,12 @@ int main() {
 		.objects={.true_radius = 20.0, .next_id = 0}, 
 		.relationships={.next_id = 0}, 
 		.next_id=0,
-		.draw_info = {
+		.state_info = {
 			.world_dimensions=ImVec2(1000.0f, 1000.0f), 
 			.view_offset=ImVec2(0, 0),
 			.x_scale_factor=0.5,
-			.user_state=VOID, 
-			.left_width=200.0f
+			.graph_state=GraphState::NONE, 
+			.left_split_width=200.0f
 		}
 	};
 	SDL_Window *window;
