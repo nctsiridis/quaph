@@ -148,3 +148,32 @@ int complete_render(SDL_Window *window) {
 	SDL_GL_SwapWindow(window);
 	return 0;
 }
+
+AppData default_app_data() {
+	AppData res = {
+		.window=NULL, 
+		.gl_context=NULL, 
+		.running=true, 
+		.state_info = {
+			.project_name="",
+			.objects=default_objects(), 
+			.relationships=default_relationships(), 
+			.app_state=AppState::EMPTY,
+			.ui_state=UIState::NONE, 
+			.object_id=0, 
+			.object_id2=0, 
+			.left_split_width=200.0f, 
+			.cursor_pos=ImVec2(0,0), 
+			.cursor_pivot=ImVec2(0,0), 
+			.draw_line_from=ImVec2(0,0), 
+			.draw_line_to=ImVec2(0,0), 
+			.screen_dimensions=ImVec2(0,0), 
+			.world_dimensions=ImVec2(1000.0f, 1000.0f), 
+			.view_offset=ImVec2(0,0), 
+			.x_scale_factor=0.5f,
+			.selected_object_id=-1,
+			.selected_relationship_id=-1
+		}
+	};
+	return res;
+}

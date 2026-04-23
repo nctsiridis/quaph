@@ -1,15 +1,27 @@
 #include "../include/draw.hpp"
 
-int state_info_window(StateInfo& state_info) {
+int draw_state_info_window(StateInfo& state_info) {
 
 	ImGui::BeginChild(
 		"left", 
 		ImVec2(state_info.left_split_width, 0), 
 		true
 	);
-	// ImGui::Text("Left view");
-	ImGui::EndChild();
 
+	if (state_info.app_state == AppState::EMPTY) {
+		ImGui::Text("No Project Selected");
+		if (ImGui::InputText(	
+			"Search Project",
+			state_info.search_buf, 
+			SEARCH_BUF_SIZE
+		)) {
+			printf("Search!\n");
+		}
+	} else if (state_info.app_state == AppState::IN_PROJECT) {
+		ImGui::Text(state_info.project_name.c_str());
+	}
+
+	ImGui::EndChild();
 	ImGui::SameLine();
 
 	ImGui::InvisibleButton("splitter", ImVec2(10, -1));
@@ -149,8 +161,6 @@ int draw_graph_window(StateInfo& state_info, Objects& objects, Relationships& re
 				click_pos.y, 
 				objects
 			);
-
-			printf("added object\n");
 		}
 		/*
 		if (ImGui::BeginMenu("Advanced")) {
@@ -164,11 +174,11 @@ int draw_graph_window(StateInfo& state_info, Objects& objects, Relationships& re
 	draw_objects(objects, graph_draw_list);
 	draw_relationships(relationships, objects, graph_draw_list);
 
-	if (state_info.graph_state == GraphState::HOVER_NEAR_OBJECT) {
+	if (state_info.ui_state == UIState::HOVER_NEAR_OBJECT) {
 		draw_relationship_builder_hover(state_info.object_id, objects, graph_draw_list);
-	} else if (state_info.graph_state == GraphState::DRAWING_LINE) {
+	} else if (state_info.ui_state == UIState::DRAWING_LINE) {
 		draw_relationship_builder_down(state_info.object_id, objects, graph_draw_list);
-	} else if (state_info.graph_state == GraphState::DRAWING_LINE_CONNECTED) {
+	} else if (state_info.ui_state == UIState::DRAWING_LINE_CONNECTED) {
 		draw_relationship_builder_connected(
 			state_info.object_id, 
 			state_info.object_id2, objects, 
@@ -178,7 +188,9 @@ int draw_graph_window(StateInfo& state_info, Objects& objects, Relationships& re
 	return 0;
 }
 
-int draw_all(StateInfo& state_info, Objects& objects, Relationships& relationships, SDL_Window *window) {
+int draw_all(StateInfo& state_info, SDL_Window *window) {
+	Objects objects = state_info.objects;
+	Relationships relationships = state_info.relationships;
 
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 
@@ -198,7 +210,7 @@ int draw_all(StateInfo& state_info, Objects& objects, Relationships& relationshi
 	
 	ImGui::Begin("Main", NULL, flags);
 
-	state_info_window(state_info);
+	draw_state_info_window(state_info);
 	draw_graph_window(state_info, objects, relationships);
 	ImGui::PopStyleVar(2);
 	ImGui::EndChild();

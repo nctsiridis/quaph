@@ -7,6 +7,7 @@
 #include "state.hpp"
 #include "quaph.hpp"
 
+#include <algorithm>
 #include <SDL.h>
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL_opengles2.h>
@@ -14,4 +15,4 @@
 #include <SDL_opengl.h>
 #endif
 
-int draw_all(StateInfo& state_info, Objects& objects, Relationships& relationships, SDL_Window *window);
+int draw_all(StateInfo& state_info, SDL_Window *window);

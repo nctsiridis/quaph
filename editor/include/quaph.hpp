@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <vector>
 #include "../include/util.hpp"
 
 struct Objects {
@@ -13,7 +14,7 @@ struct Objects {
 	float true_radius; // true_radius
 	float display_radius;
 	int next_id;
-	// std::vector<int> schemas;
+	// vector<json>
 	// std::vector<std::string> data;
 	// std::vector<std::vector<std::string>> attachments;
 };
@@ -29,6 +30,8 @@ struct Relationships {
 	// std::vector<std::string> data;
 };
 
+Objects default_objects();
+Relationships default_relationships();
 int create_object(float true_x, float true_y, float display_x, float display_y, Objects& objects);
 int remove_object(int id, Objects& objects);
 int create_relationship(int from, int to, Relationships& relationships);

@@ -1,5 +1,34 @@
 #include "../include/quaph.hpp"
 
+Objects default_objects() {
+	Objects res = {
+		.ids={}, 
+		.timestamps={}, 
+		.true_xs={}, 
+		.true_ys={}, 
+		.display_xs={}, 
+		.display_ys={}, 
+		.id_to_index={}, 
+		.true_radius=20.0f, 
+		.display_radius=0.0f, 
+		.next_id=0
+	};
+	return res;
+}
+
+Relationships default_relationships() {
+	Relationships res = {
+		.ids={}, 
+		.timestamps={}, 
+		.from={}, 
+		.to={}, 
+		.id_to_index={}, 
+		.next_id=0
+	};
+	return res;
+}
+
+
 int create_object(float true_x, float true_y, float display_x, float display_y, Objects& objects) {
 	std::string timestamp = get_timestamp();
 	objects.ids.push_back(objects.next_id);

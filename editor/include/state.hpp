@@ -14,7 +14,14 @@
 #include <SDL_opengl.h>
 #endif
 
-enum class GraphState { // GRAPH STATE
+#define SEARCH_BUF_SIZE 128
+
+enum class AppState { // APP STATE
+	EMPTY,
+	IN_PROJECT
+};
+
+enum class UIState { // UI STATE
 	NONE,
 	HOVER_VOID,
 	HOVER_OBJECT,
@@ -29,7 +36,16 @@ enum class GraphState { // GRAPH STATE
 };
 
 struct StateInfo {
-	GraphState graph_state; // TODO user_state != graph state
+	std::string project_name;
+
+	char search_buf[SEARCH_BUF_SIZE] = "";
+
+	Objects objects;
+	Relationships relationships;
+
+	AppState app_state;
+	UIState ui_state; // TODO user_state != graph state
+
 	int object_id, object_id2;
 	float left_split_width;
 	ImVec2 cursor_pos, cursor_pivot;
@@ -39,11 +55,14 @@ struct StateInfo {
 	ImVec2 world_dimensions;
 	ImVec2 view_offset;
 	float x_scale_factor; // what percentage of world_x is view_x
+
+	int selected_object_id;
+	int selected_relationship_id;
 	// graph_world_width, graph_world_height
 	// graph_view_width, graph_view_height ! given by ImGui
 	// graph_view_x, graph_view_y
 	// zoom // (x axis scale factor)
 }; 
 
-int update_state_info(StateInfo& state_info, Objects& objects, Relationships& relationship);
+int update_state_info(StateInfo& state_info);
 ImVec2 display_to_true(StateInfo& state_info, ImVec2 pos);

@@ -98,83 +98,86 @@ bool within_bounds_of_object_by_id(
 	return dist < outer && dist > inner;
 }
 
-int update_state_info(StateInfo& state_info, Objects& objects, Relationships& relationships) {
+int update_state_info(StateInfo& state_info) {
+	Objects objects = state_info.objects;
+	Relationships relationships = state_info.relationships;
+
 	ImGuiIO& io = ImGui::GetIO();
 	ImVec2 cursor_pos = ImGui::GetMousePos();
 
 	update_display_properties(state_info, objects); // TODO decide where to call this
 
-	if (state_info.graph_state == GraphState::NONE) {
+	if (state_info.ui_state == UIState::NONE) {
 		// not committed to either side of screen
 
 		if (on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::HOVER_VOID;
+			state_info.ui_state = UIState::HOVER_VOID;
 			printf("switched to graph\n");
 		}
-	} else if (state_info.graph_state == GraphState::HOVER_VOID) {
+	} else if (state_info.ui_state == UIState::HOVER_VOID) {
 		// hovering on nothing on graph side of screen
 
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if ((state_info.object_id = near_any_object(
 			cursor_pos, 
 			objects, 
 			objects.display_radius
 		)) >= 0) {
-			state_info.graph_state = GraphState::HOVER_OBJECT;
+			state_info.ui_state = UIState::HOVER_OBJECT;
 			printf("switched to graph hover object\n");
 		} else if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 			state_info.cursor_pivot = display_to_true(state_info, cursor_pos);
-			state_info.graph_state = GraphState::DRAGGING_SCREEN;
+			state_info.ui_state = UIState::DRAGGING_SCREEN;
 			printf("switch to graph left down void\n");
 		} else if ((state_info.object_id = near_any_object(
 			cursor_pos, 
 			objects, 
 			objects.display_radius + 20
 		)) >= 0) {
-			state_info.graph_state = GraphState::HOVER_NEAR_OBJECT;
+			state_info.ui_state = UIState::HOVER_NEAR_OBJECT;
 			printf("switched to hover near object\n");
 		}
-	} else if (state_info.graph_state == GraphState::HOVER_OBJECT) {
+	} else if (state_info.ui_state == UIState::HOVER_OBJECT) {
 		// hovering over object on graph
 
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!near_object_by_id(
 			cursor_pos, 
 			state_info.object_id, 
 			objects, objects.display_radius
 		)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::LEFT_DOWN_OBJECT;
+			state_info.ui_state = UIState::LEFT_DOWN_OBJECT;
 			printf("switched to graph left down object\n");
 		}
-	} else if (state_info.graph_state == GraphState::HOVER_NEAR_OBJECT) {
+	} else if (state_info.ui_state == UIState::HOVER_NEAR_OBJECT) {
 		// graph hover near object
 
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!within_bounds_of_object_by_id(
 			state_info.object_id, cursor_pos, state_info, objects,
 			objects.display_radius, objects.display_radius + 20
 		)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::DRAWING_LINE;
+			state_info.ui_state = UIState::DRAWING_LINE;
 			printf("switch to line drawin\n");
 		}
-	} else if (state_info.graph_state == GraphState::DRAWING_LINE) {
+	} else if (state_info.ui_state == UIState::DRAWING_LINE) {
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switch to void\n");
 		} else if ((state_info.object_id2 = near_any_object_excluding(
 			cursor_pos, 
@@ -182,12 +185,12 @@ int update_state_info(StateInfo& state_info, Objects& objects, Relationships& re
 			objects,
 			objects.display_radius + 20
 		)) >= 0) {
-			state_info.graph_state = GraphState::DRAWING_LINE_CONNECTED;
+			state_info.ui_state = UIState::DRAWING_LINE_CONNECTED;
 			printf("switched to drawing line connected\n");
 		}
-	} else if (state_info.graph_state == GraphState::DRAWING_LINE_CONNECTED) {
+	} else if (state_info.ui_state == UIState::DRAWING_LINE_CONNECTED) {
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!near_object_by_id(
 			cursor_pos, 
@@ -195,37 +198,37 @@ int update_state_info(StateInfo& state_info, Objects& objects, Relationships& re
 			objects, 
 			objects.display_radius + 20
 		)) {
-			state_info.graph_state = GraphState::DRAWING_LINE;
+			state_info.ui_state = UIState::DRAWING_LINE;
 			printf("switching to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			create_relationship(state_info.object_id, state_info.object_id2, relationships);
 			printf("switch to void and adding relationship\n");
 		}
-	} else if (state_info.graph_state == GraphState::LEFT_DOWN_OBJECT) {
+	} else if (state_info.ui_state == UIState::LEFT_DOWN_OBJECT) {
 		// left mouse button down on graph object
 
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::NONE;
-			printf("switched to void, graph item clicked!\n");
+			state_info.ui_state = UIState::NONE;
+			// state_info.selected_object_id = 
 		} else if (!near_object_by_id(
 			cursor_pos, 
 			state_info.object_id, 
 			objects, 
 			objects.display_radius
 		)) {
-			state_info.graph_state = GraphState::DRAGGING_OBJECT;
+			state_info.ui_state = UIState::DRAGGING_OBJECT;
 			printf("switched to object dragging mode\n");
 		}
-	} else if (state_info.graph_state == GraphState::DRAGGING_OBJECT) {
+	} else if (state_info.ui_state == UIState::DRAGGING_OBJECT) {
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else {
 			int index = objects.id_to_index[state_info.object_id];
@@ -235,12 +238,12 @@ int update_state_info(StateInfo& state_info, Objects& objects, Relationships& re
 			objects.true_xs[index] = true_pos.x;
 			objects.true_ys[index] = true_pos.y;
 		}
-	} else if (state_info.graph_state == GraphState::DRAGGING_SCREEN) {
+	} else if (state_info.ui_state == UIState::DRAGGING_SCREEN) {
 		if (!on_graph_side(cursor_pos, state_info)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-			state_info.graph_state = GraphState::NONE;
+			state_info.ui_state = UIState::NONE;
 			printf("switched to void\n");
 		} else {
 			ImVec2 true_cursor = display_to_true(state_info, cursor_pos);
