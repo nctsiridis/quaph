@@ -2,5 +2,6 @@
 */temp/
 *.swp
 *.swo
+*.pyc
 .venv
 */test_data/
