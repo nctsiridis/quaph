@@ -1,4 +1,6 @@
 #include "../include/state.hpp"
+#include "../include/remote.hpp"
+#include <unordered_map>
 
 ImVec2 display_to_true(StateInfo& state_info, ImVec2 pos) {
 	float ratio = state_info.screen_dimensions.y / state_info.screen_dimensions.y;
@@ -99,8 +101,8 @@ bool within_bounds_of_object_by_id(
 }
 
 int update_state_info(StateInfo& state_info) {
-	Objects objects = state_info.objects;
-	Relationships relationships = state_info.relationships;
+	Objects& objects = state_info.objects;
+	Relationships& relationships = state_info.relationships;
 
 	ImGuiIO& io = ImGui::GetIO();
 	ImVec2 cursor_pos = ImGui::GetMousePos();
@@ -203,6 +205,19 @@ int update_state_info(StateInfo& state_info) {
 		} else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
 			state_info.ui_state = UIState::NONE;
 			create_relationship(state_info.object_id, state_info.object_id2, relationships);
+			if (state_info.app_state == AppState::IN_PROJECT) {
+				std::string from_uid = objects.uids[objects.id_to_index[state_info.object_id]];
+				std::string to_uid = objects.uids[objects.id_to_index[state_info.object_id2]];
+				std::string temp_uid = "t-" + std::to_string(state_info.remote.next_temp_id++);
+				relationships.uids.back() = temp_uid;
+				state_info.remote.pending_changes.push_back({
+					{"type", "add-rel"},
+					{"uid", temp_uid},
+					{"from_uid", from_uid},
+					{"to_uid", to_uid},
+					{"custom_data", nlohmann::json::object()}
+				});
+			}
 			printf("switch to void and adding relationship\n");
 		}
 	} else if (state_info.ui_state == UIState::LEFT_DOWN_OBJECT) {
@@ -263,6 +278,136 @@ int update_state_info(StateInfo& state_info) {
 
 		state_info.view_offset.x -= true_cursor2.x - true_cursor.x;
 		state_info.view_offset.y -= true_cursor2.y - true_cursor.y;
+	}
+
+	return 0;
+}
+
+static void apply_fetch_commit_result(StateInfo& state_info, const nlohmann::json& result) {
+	state_info.objects = default_objects();
+	state_info.relationships = default_relationships();
+
+	std::unordered_map<std::string, int> uid_to_local_id;
+
+	for (auto& [uid, obj_json] : result["objs"].items()) {
+		nlohmann::json custom_data = obj_json.value("custom_data", nlohmann::json::object());
+		float x = custom_data.value("x", 0.0f);
+		float y = custom_data.value("y", 0.0f);
+		create_object(x, y, x, y, state_info.objects);
+		state_info.objects.uids.back() = uid;
+		state_info.objects.custom_data.back() = custom_data;
+		uid_to_local_id[uid] = state_info.objects.ids.back();
+	}
+
+	for (auto& [uid, rel_json] : result["rels"].items()) {
+		std::string from_uid = rel_json.value("from_uid", "");
+		std::string to_uid = rel_json.value("to_uid", "");
+		auto from_it = uid_to_local_id.find(from_uid);
+		auto to_it = uid_to_local_id.find(to_uid);
+		if (from_it == uid_to_local_id.end() || to_it == uid_to_local_id.end()) {
+			std::cerr << "apply_fetch_commit_result: relationship " << uid
+			          << " references unknown endpoint uid, skipping\n";
+			continue;
+		}
+		create_relationship(from_it->second, to_it->second, state_info.relationships);
+		state_info.relationships.uids.back() = uid;
+		state_info.relationships.custom_data.back() = rel_json.value("custom_data", nlohmann::json::object());
+	}
+
+	state_info.remote.pending_changes.clear();
+	state_info.remote.next_temp_id = 0;
+	state_info.project_name = state_info.remote.current_project_id;
+	state_info.app_state = AppState::IN_PROJECT;
+	state_info.remote.stage = ConnectStage::IN_PROJECT;
+}
+
+static void apply_create_commit_result(StateInfo& state_info, const nlohmann::json& result) {
+	std::unordered_map<std::string, std::string> temp_to_real;
+	for (auto& [temp_uid, real_uid] : result["temp_to_real_map"].items()) {
+		temp_to_real[temp_uid] = real_uid.get<std::string>();
+	}
+
+	for (auto& uid : state_info.objects.uids) {
+		auto it = temp_to_real.find(uid);
+		if (it != temp_to_real.end()) uid = it->second;
+	}
+	for (auto& uid : state_info.relationships.uids) {
+		auto it = temp_to_real.find(uid);
+		if (it != temp_to_real.end()) uid = it->second;
+	}
+
+	state_info.remote.current_commit_id = result.value("new_commit_id", "");
+	state_info.remote.current_save_id.clear();
+	state_info.remote.pending_changes.clear();
+}
+
+int update_remote_state(StateInfo& state_info) {
+	RemoteState& remote = state_info.remote;
+	net_poll(remote.client);
+
+	if (remote.stage == ConnectStage::CONNECTING) {
+		if (remote.client.connected) {
+			remote.stage = ConnectStage::ENTERING_IDENTITY;
+		}
+		// no timeout for MVP: a connection that never opens leaves the user on
+		// the "Connecting..." screen indefinitely (acceptable for a first pass).
+		return 0;
+	}
+
+	nlohmann::json msg;
+	while (net_pop_message(remote.client, msg)) {
+		if (!msg.contains("id") || msg["id"].get<int>() != remote.pending_request_id) {
+			continue; // stale or unsolicited response, drop it
+		}
+
+		std::string op = msg.value("op", "");
+		bool ok = msg.value("ok", false);
+
+		if (!ok) {
+			remote.last_error = msg["error"].value("message", "unknown error");
+			if (remote.stage == ConnectStage::LOADING) {
+				remote.stage = ConnectStage::BROWSING_COMMITS;
+			}
+			remote.pending_request_id = -1;
+			continue;
+		}
+
+		const nlohmann::json& result = msg["result"];
+
+		if (op == "search_projects") {
+			remote.project_list.clear();
+			for (auto& p : result["projects"]) remote.project_list.push_back(p.get<std::string>());
+			remote.stage = ConnectStage::BROWSING_PROJECTS;
+		} else if (op == "create_project") {
+			remote.commit_list.clear();
+			remote.stage = ConnectStage::BROWSING_COMMITS;
+			remote.pending_request_id = remote_search_commits(remote.client, remote.current_project_id);
+			continue; // chained follow-up request already in flight
+		} else if (op == "search_commits") {
+			remote.commit_list.clear();
+			for (auto& c : result["commits"]) {
+				CommitInfo info;
+				info.id = c.value("id", "");
+				info.message = c.value("message", "");
+				info.author_name = c.value("author_name", "");
+				info.time_unix = c.value("time", 0LL);
+				remote.commit_list.push_back(info);
+			}
+			remote.stage = ConnectStage::BROWSING_COMMITS;
+		} else if (op == "fetch_commit") {
+			apply_fetch_commit_result(state_info, result);
+		} else if (op == "create_save") {
+			remote.current_save_id = result.value("save_id", "");
+			remote.pending_request_id = remote_create_commit(
+				remote.client, remote.current_project_id, remote.current_commit_id,
+				remote.current_save_id, remote.full_name_buf, remote.email_buf
+			);
+			continue; // chained follow-up request already in flight ("Save & Commit")
+		} else if (op == "create_commit") {
+			apply_create_commit_result(state_info, result);
+		}
+
+		remote.pending_request_id = -1;
 	}
 
 	return 0;

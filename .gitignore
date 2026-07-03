@@ -3,5 +3,9 @@
 *.swp
 *.swo
 *.pyc
+__pycache__/
 .venv
 */test_data/
+pyvc/projects/
+editor/external/emsdk/
+editor/imgui.ini

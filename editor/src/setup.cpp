@@ -7,7 +7,7 @@ int sdl_event_loop(bool& running) {
 		if (event.type == SDL_QUIT) {
 			running = false;
 			return 0;
-		} 
+		}
 	}
 	return 0;
 }
@@ -172,7 +172,8 @@ AppData default_app_data() {
 			.view_offset=ImVec2(0,0), 
 			.x_scale_factor=0.5f,
 			.selected_object_id=-1,
-			.selected_relationship_id=-1
+			.selected_relationship_id=-1,
+			.remote={}
 		}
 	};
 	return res;

@@ -225,3 +225,56 @@ def test_create_another_commit(
     assert new_commit_id in all_commit_ids
     assert len(all_commit_ids) == 3
     assert len(git_repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)) == 1
+
+def test_fetch_commit(create_project, create_commit):
+    project_path = create_project["project_path"]
+    new_commit_id = create_commit["new_commit_id"]
+    temp_to_real_map = create_commit["temp_to_real_map"]
+
+    commit_data = pyquaph.fetch_commit(project_path, new_commit_id)
+    assert commit_data.commit_id == new_commit_id
+    assert len(commit_data.objs) == 2
+    assert len(commit_data.rels) == 1
+
+    rel_uid = temp_to_real_map["t-2"]
+    rel = commit_data.rels[rel_uid]
+    rel_json = rel.to_json()
+    assert rel_json["from_uid"] == temp_to_real_map["t-0"]
+    assert rel_json["to_uid"] == temp_to_real_map["t-1"]
+
+    commit_json = commit_data.to_json()
+    assert set(commit_json["objs"].keys()) == set(commit_data.objs.keys())
+    assert set(commit_json["rels"].keys()) == set(commit_data.rels.keys())
+
+def test_list_commits(create_project, create_commit):
+    project_path = create_project["project_path"]
+    new_commit_id = create_commit["new_commit_id"]
+
+    commits = pyquaph.list_commits(project_path)
+    assert len(commits) == 2
+    commit_ids = {c["id"] for c in commits}
+    assert new_commit_id in commit_ids
+    for c in commits:
+        assert isinstance(c["message"], str)
+        assert isinstance(c["author_name"], str)
+        assert isinstance(c["parents"], list)
+
+def test_list_projects(create_project):
+    test_path = create_project["project_path"].parent
+    project_name = create_project["project_name"]
+
+    projects = pyquaph.list_projects(test_path)
+    assert projects == [project_name]
+
+def test_list_projects_empty_root(cleanup):
+    assert pyquaph.list_projects(test_path / "does_not_exist") == []
+
+def test_list_saves_no_saves_dir_yet(create_project):
+    project_path = create_project["project_path"]
+    initial_commit = create_project["initial_commit"]
+    assert pyquaph.list_saves(project_path, initial_commit) == []
+
+def test_fetch_commit_unknown_id(create_project):
+    project_path = create_project["project_path"]
+    with pytest.raises(LookupError):
+        pyquaph.fetch_commit(project_path, "0" * 40)

@@ -1,24 +1,131 @@
 #include "../include/draw.hpp"
+#include "../include/remote.hpp"
+#include <cstdlib>
+
+static void draw_connect_panel(StateInfo& state_info) {
+	RemoteState& remote = state_info.remote;
+	bool busy = remote.pending_request_id != -1;
+
+	switch (remote.stage) {
+		case ConnectStage::DISCONNECTED: {
+			ImGui::Text("Connect to a quaph server");
+			ImGui::InputText("Host", remote.host_buf, HOST_BUF_SIZE);
+			ImGui::InputText("Port", remote.port_buf, PORT_BUF_SIZE, ImGuiInputTextFlags_CharsDecimal);
+			if (ImGui::Button("Connect")) {
+				int port = atoi(remote.port_buf);
+				if (net_connect(remote.client, remote.host_buf, port) == 0) {
+					remote.stage = ConnectStage::CONNECTING;
+					remote.last_error.clear();
+				} else {
+					remote.last_error = "failed to connect";
+				}
+			}
+			break;
+		}
+		case ConnectStage::CONNECTING: {
+			ImGui::Text("Connecting...");
+			break;
+		}
+		case ConnectStage::ENTERING_IDENTITY: {
+			ImGui::Text("Who's editing?");
+			ImGui::InputText("Full name", remote.full_name_buf, IDENTITY_BUF_SIZE);
+			ImGui::InputText("Email", remote.email_buf, IDENTITY_BUF_SIZE);
+			bool ready = remote.full_name_buf[0] != '\0' && remote.email_buf[0] != '\0';
+			ImGui::BeginDisabled(!ready || busy);
+			if (ImGui::Button("Continue")) {
+				remote.pending_request_id = remote_search_projects(remote.client);
+			}
+			ImGui::EndDisabled();
+			break;
+		}
+		case ConnectStage::BROWSING_PROJECTS: {
+			ImGui::Text("Projects");
+			for (auto& name : remote.project_list) {
+				if (ImGui::Selectable(name.c_str())) {
+					remote.current_project_id = name;
+					remote.commit_list.clear();
+					remote.pending_request_id = remote_search_commits(remote.client, name);
+				}
+			}
+			ImGui::Separator();
+			ImGui::InputText("New project", remote.new_project_buf, PROJECT_ID_BUF_SIZE);
+			ImGui::BeginDisabled(remote.new_project_buf[0] == '\0' || busy);
+			if (ImGui::Button("Create")) {
+				remote.current_project_id = remote.new_project_buf;
+				remote.pending_request_id = remote_create_project(
+					remote.client, remote.current_project_id,
+					remote.full_name_buf, remote.email_buf
+				);
+				remote.new_project_buf[0] = '\0';
+			}
+			ImGui::EndDisabled();
+			break;
+		}
+		case ConnectStage::BROWSING_COMMITS: {
+			if (ImGui::Button("< Back")) {
+				remote.stage = ConnectStage::BROWSING_PROJECTS;
+			}
+			ImGui::Text("%s", remote.current_project_id.c_str());
+			for (auto& commit : remote.commit_list) {
+				std::string label = commit.id.substr(0, 7) + " - " + commit.message;
+				if (ImGui::Selectable(label.c_str())) {
+					remote.current_commit_id = commit.id;
+					remote.stage = ConnectStage::LOADING;
+					remote.pending_request_id = remote_fetch_commit(
+						remote.client, remote.current_project_id, commit.id
+					);
+				}
+			}
+			break;
+		}
+		case ConnectStage::LOADING: {
+			ImGui::Text("Loading...");
+			break;
+		}
+		case ConnectStage::IN_PROJECT:
+			break; // handled by the AppState::IN_PROJECT branch below
+	}
+
+	if (!remote.last_error.empty()) {
+		ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", remote.last_error.c_str());
+	}
+}
+
+static void draw_in_project_panel(StateInfo& state_info) {
+	RemoteState& remote = state_info.remote;
+	bool busy = remote.pending_request_id != -1;
+
+	ImGui::Text("%s", state_info.project_name.c_str());
+	ImGui::Text("%zu unsaved change(s)", remote.pending_changes.size());
+
+	ImGui::BeginDisabled(remote.pending_changes.empty() || busy);
+	if (ImGui::Button("Save & Commit")) {
+		remote.pending_request_id = remote_create_save(
+			remote.client,
+			remote.current_project_id,
+			remote.current_commit_id,
+			remote.pending_changes
+		);
+	}
+	ImGui::EndDisabled();
+
+	if (!remote.last_error.empty()) {
+		ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", remote.last_error.c_str());
+	}
+}
 
 int draw_state_info_window(StateInfo& state_info) {
 
 	ImGui::BeginChild(
-		"left", 
-		ImVec2(state_info.left_split_width, 0), 
+		"left",
+		ImVec2(state_info.left_split_width, 0),
 		true
 	);
 
 	if (state_info.app_state == AppState::EMPTY) {
-		ImGui::Text("No Project Selected");
-		if (ImGui::InputText(	
-			"Search Project",
-			state_info.search_buf, 
-			SEARCH_BUF_SIZE
-		)) {
-			printf("Search!\n");
-		}
+		draw_connect_panel(state_info);
 	} else if (state_info.app_state == AppState::IN_PROJECT) {
-		ImGui::Text(state_info.project_name.c_str());
+		draw_in_project_panel(state_info);
 	}
 
 	ImGui::EndChild();
@@ -155,12 +262,24 @@ int draw_graph_window(StateInfo& state_info, Objects& objects, Relationships& re
 			ImVec2 true_pos = display_to_true(state_info, click_pos);
 
 			create_object(
-				true_pos.x, 
-				true_pos.y, 
-				click_pos.x, 
-				click_pos.y, 
+				true_pos.x,
+				true_pos.y,
+				click_pos.x,
+				click_pos.y,
 				objects
 			);
+
+			if (state_info.app_state == AppState::IN_PROJECT) {
+				std::string temp_uid = "t-" + std::to_string(state_info.remote.next_temp_id++);
+				nlohmann::json custom_data = {{"x", true_pos.x}, {"y", true_pos.y}};
+				objects.uids.back() = temp_uid;
+				objects.custom_data.back() = custom_data;
+				state_info.remote.pending_changes.push_back({
+					{"type", "add-obj"},
+					{"uid", temp_uid},
+					{"custom_data", custom_data}
+				});
+			}
 		}
 		/*
 		if (ImGui::BeginMenu("Advanced")) {
@@ -189,8 +308,8 @@ int draw_graph_window(StateInfo& state_info, Objects& objects, Relationships& re
 }
 
 int draw_all(StateInfo& state_info, SDL_Window *window) {
-	Objects objects = state_info.objects;
-	Relationships relationships = state_info.relationships;
+	Objects& objects = state_info.objects;
+	Relationships& relationships = state_info.relationships;
 
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 

@@ -2,15 +2,17 @@
 
 Objects default_objects() {
 	Objects res = {
-		.ids={}, 
-		.timestamps={}, 
-		.true_xs={}, 
-		.true_ys={}, 
-		.display_xs={}, 
-		.display_ys={}, 
-		.id_to_index={}, 
-		.true_radius=20.0f, 
-		.display_radius=0.0f, 
+		.ids={},
+		.timestamps={},
+		.true_xs={},
+		.true_ys={},
+		.display_xs={},
+		.display_ys={},
+		.id_to_index={},
+		.uids={},
+		.custom_data={},
+		.true_radius=20.0f,
+		.display_radius=0.0f,
 		.next_id=0
 	};
 	return res;
@@ -18,11 +20,13 @@ Objects default_objects() {
 
 Relationships default_relationships() {
 	Relationships res = {
-		.ids={}, 
-		.timestamps={}, 
-		.from={}, 
-		.to={}, 
-		.id_to_index={}, 
+		.ids={},
+		.timestamps={},
+		.from={},
+		.to={},
+		.id_to_index={},
+		.uids={},
+		.custom_data={},
 		.next_id=0
 	};
 	return res;
@@ -38,6 +42,8 @@ int create_object(float true_x, float true_y, float display_x, float display_y, 
 	objects.display_xs.push_back(display_x);
 	objects.display_ys.push_back(display_y);
 	objects.id_to_index[objects.next_id] = objects.ids.size() - 1;
+	objects.uids.push_back("");
+	objects.custom_data.push_back(nlohmann::json::object());
 	objects.next_id++;
 	return 0;
 }
@@ -50,11 +56,15 @@ int remove_object(int id, Objects& objects) {
 	objects.timestamps[index] = objects.timestamps[n - 1];
 	objects.true_xs[index] = objects.true_xs[n - 1];
 	objects.true_ys[index] = objects.true_ys[n - 1];
+	objects.uids[index] = objects.uids[n - 1];
+	objects.custom_data[index] = objects.custom_data[n - 1];
 	objects.id_to_index[last_id] = index;
 	objects.ids.pop_back();
 	objects.timestamps.pop_back();
 	objects.true_xs.pop_back();
 	objects.true_ys.pop_back();
+	objects.uids.pop_back();
+	objects.custom_data.pop_back();
 	objects.id_to_index.erase(id);
 	return 0;
 }
@@ -66,6 +76,8 @@ int create_relationship(int from, int to, Relationships& relationships) {
 	relationships.from.push_back(from);
 	relationships.to.push_back(to);
 	relationships.id_to_index[relationships.next_id] = relationships.ids.size() - 1;
+	relationships.uids.push_back("");
+	relationships.custom_data.push_back(nlohmann::json::object());
 	relationships.next_id++;
 	return 0;
 }
@@ -78,11 +90,15 @@ int remove_relationship(int id, Relationships& relationships) {
 	relationships.timestamps[index] = relationships.timestamps[n - 1];
 	relationships.from[index] = relationships.from[n - 1];
 	relationships.to[index] = relationships.to[n - 1];
+	relationships.uids[index] = relationships.uids[n - 1];
+	relationships.custom_data[index] = relationships.custom_data[n - 1];
 	relationships.id_to_index[last_id] = index;
 	relationships.ids.pop_back();
 	relationships.timestamps.pop_back();
 	relationships.from.pop_back();
 	relationships.to.pop_back();
+	relationships.uids.pop_back();
+	relationships.custom_data.pop_back();
 	relationships.id_to_index.erase(id);
 	return 0;
 }

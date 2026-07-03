@@ -6,6 +6,7 @@ void main_loop(void *arg) {
 	AppData *app_data = (AppData*)arg;
 	sdl_event_loop(app_data->running);
 	start_frames();
+	update_remote_state(app_data->state_info);
 	update_state_info(app_data->state_info);
 	draw_all(app_data->state_info, app_data->window);
 	complete_render(app_data->window);

@@ -9,7 +9,6 @@
 #ifdef __EMSCRIPTEN__
 #include "../external/imgui-1.92.6/examples/libs/emscripten/emscripten_mainloop_stub.h"
 #endif
-// TODO remove (we aren't using this)
 
 struct AppData {
 	SDL_Window *window;

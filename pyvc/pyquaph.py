@@ -36,7 +36,7 @@ class QuaphRel:
             "type": "rel",
             "uid": self.uid,
             "from_uid": self.from_uid,
-            "to_uid": self.uid,
+            "to_uid": self.to_uid,
             "custom_data": self.custom_data
         }
 
@@ -57,12 +57,12 @@ class CommitData:
     def to_json(self) -> dict:
         objs_json = dict()
         rels_json = dict()
-        
-        for k, v in self.objs:
-            objs_json.append[k] = v.to_json()
 
-        for k, v in self.rels:
-            rels_json.append[k] = v.to_json()
+        for k, v in self.objs.items():
+            objs_json[k] = v.to_json()
+
+        for k, v in self.rels.items():
+            rels_json[k] = v.to_json()
 
         return {
             "commit_id": self.commit_id,
@@ -73,13 +73,15 @@ class CommitData:
     @classmethod
     def build(cls, git_repo, commit_id):
         commit = git_repo.get(commit_id)
+        if commit is None:
+            raise LookupError(f"no such commit: {commit_id}")
 
         objs = dict()
         rels = dict()
         for entry in commit.tree:
-            if entry.type == pygit2.Tree:
+            if entry.type == pygit2.enums.ObjectType.TREE:
                 for sub_entry in entry:
-                    if sub_entry.type == pygit2.Blob:
+                    if sub_entry.type == pygit2.enums.ObjectType.BLOB:
                         if entry.name == "obj":
                             obj = QuaphObj.from_json(
                                 json.loads(sub_entry.data)
@@ -103,11 +105,13 @@ class AddObj(Change):
 
     def apply(self, change_context):
         real_id = change_context.assign_real_id(self.uid)
+        real_json = self.to_json()
+        real_json["uid"] = real_id
         blob_id = change_context.git_repo.create_blob(
-            json.dumps(self.to_json())
+            json.dumps(real_json)
         )
         change_context.obj_builder.insert(
-            real_id, 
+            real_id,
             blob_id,
             pygit2.enums.FileMode.BLOB
         )
@@ -137,6 +141,7 @@ class AddRel(Change):
     def apply(self, change_context):
         real_id = change_context.assign_real_id(self.uid)
         real_json = self.to_json()
+        real_json["uid"] = real_id
         if self.from_uid[:2] == "t-":
             real_from_uid = change_context.get_real_id(self.from_uid)
             real_json["from_uid"] = real_from_uid
@@ -286,10 +291,10 @@ class ChangeContext:
         self._real_ids = set()
         self.commit_data = CommitData.build(git_repo, str(commit.id))
 
-        for k, _ in self.commit_data.objs:
+        for k in self.commit_data.objs:
             self._real_ids.add(k)
 
-        for k, _ in self.commit_data.rels:
+        for k in self.commit_data.rels:
             self._real_ids.add(k)
 
         if self.builder.get("obj") is not None:
@@ -340,8 +345,8 @@ class ChangeContext:
             for i in range(1, 1000): # <- TODO set max
                 bn = f"branch-{i}"
                 if (self.git_repo.lookup_branch(
-                    bn, 
-                    pg.enums.BranchType.LOCAL
+                    bn,
+                    pygit2.enums.BranchType.LOCAL
                 ) is None):
                     branch = self.git_repo.create_branch(bn, self.commit)
                     break
@@ -496,15 +501,36 @@ def fetch_save(path: pathlib.Path, commit_id, save_id):
     return change_list
 
 def fetch_commit(path: pathlib.Path, commit_id):
-    return CommitData.build(path, commit_id)
+    git_repo = pygit2.Repository(path / "git")
+    return CommitData.build(git_repo, commit_id)
+
+def commit_to_json(commit: pygit2.Commit) -> dict:
+    return {
+        "id": str(commit.id),
+        "message": commit.message,
+        "author_name": commit.author.name,
+        "author_email": commit.author.email,
+        "time": commit.commit_time,
+        "parents": [str(p_id) for p_id in commit.parent_ids]
+    }
 
 def list_commits(path: pathlib.Path):
     git_repo = pygit2.Repository(path / "git")
-    return list(utils.all_commits(git_repo))
+    return [commit_to_json(commit) for commit in utils.all_commits(git_repo)]
+
+def list_projects(projects_root: pathlib.Path) -> list:
+    if not projects_root.is_dir():
+        return []
+    return [
+        entry.name for entry in projects_root.iterdir()
+        if entry.is_dir() and (entry / ".quaph").is_file()
+    ]
 
 def list_saves(path: pathlib.Path, commit_id):
     save_path = path / "saves"
     save_list = list()
+    if not save_path.is_dir():
+        return save_list
     for commit_folder in save_path.iterdir():
         if commit_folder.name == commit_id:
             for save_file in commit_folder.iterdir():
