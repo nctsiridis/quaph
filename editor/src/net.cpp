@@ -1,5 +1,76 @@
 #include "../include/net.hpp"
 #include <iostream>
+#include <stdexcept>
+
+uint8_t op_name_to_code(const std::string& op) {
+	if (op == "search_projects") return static_cast<uint8_t>(OpCode::SEARCH_PROJECTS);
+	if (op == "search_commits")  return static_cast<uint8_t>(OpCode::SEARCH_COMMITS);
+	if (op == "search_saves")    return static_cast<uint8_t>(OpCode::SEARCH_SAVES);
+	if (op == "create_project")  return static_cast<uint8_t>(OpCode::CREATE_PROJECT);
+	if (op == "create_save")     return static_cast<uint8_t>(OpCode::CREATE_SAVE);
+	if (op == "create_commit")   return static_cast<uint8_t>(OpCode::CREATE_COMMIT);
+	if (op == "fetch_commit")    return static_cast<uint8_t>(OpCode::FETCH_COMMIT);
+	if (op == "fetch_save")      return static_cast<uint8_t>(OpCode::FETCH_SAVE);
+	return 0;
+}
+
+std::string op_code_to_name(uint8_t code) {
+	switch (static_cast<OpCode>(code)) {
+		case OpCode::SEARCH_PROJECTS: return "search_projects";
+		case OpCode::SEARCH_COMMITS:  return "search_commits";
+		case OpCode::SEARCH_SAVES:    return "search_saves";
+		case OpCode::CREATE_PROJECT:  return "create_project";
+		case OpCode::CREATE_SAVE:     return "create_save";
+		case OpCode::CREATE_COMMIT:   return "create_commit";
+		case OpCode::FETCH_COMMIT:    return "fetch_commit";
+		case OpCode::FETCH_SAVE:      return "fetch_save";
+	}
+	return "";
+}
+
+std::vector<uint8_t> net_pack_request(uint32_t request_id, const std::string& op, const nlohmann::json& args) {
+	std::vector<uint8_t> msgpack_payload = nlohmann::json::to_msgpack(args);
+	std::vector<uint8_t> frame;
+	frame.reserve(5 + msgpack_payload.size());
+	// 4-byte request_id (big-endian)
+	frame.push_back(static_cast<uint8_t>((request_id >> 24) & 0xFF));
+	frame.push_back(static_cast<uint8_t>((request_id >> 16) & 0xFF));
+	frame.push_back(static_cast<uint8_t>((request_id >> 8) & 0xFF));
+	frame.push_back(static_cast<uint8_t>(request_id & 0xFF));
+	// 1-byte op_code
+	frame.push_back(op_name_to_code(op));
+	// MessagePack binary payload
+	frame.insert(frame.end(), msgpack_payload.begin(), msgpack_payload.end());
+	return frame;
+}
+
+nlohmann::json net_unpack_response(const uint8_t* data, size_t size) {
+	if (size < 6) {
+		throw std::runtime_error("truncated binary response header");
+	}
+	uint32_t request_id = (static_cast<uint32_t>(data[0]) << 24) |
+	                      (static_cast<uint32_t>(data[1]) << 16) |
+	                      (static_cast<uint32_t>(data[2]) << 8)  |
+	                      static_cast<uint32_t>(data[3]);
+	uint8_t op_code = data[4];
+	uint8_t status  = data[5];
+	nlohmann::json body = nlohmann::json::object();
+	if (size > 6) {
+		body = nlohmann::json::from_msgpack(data + 6, data + size);
+	}
+	bool ok = (status == 1);
+	nlohmann::json msg = {
+		{"id", static_cast<int>(request_id)},
+		{"op", op_code_to_name(op_code)},
+		{"ok", ok}
+	};
+	if (ok) {
+		msg["result"] = body;
+	} else {
+		msg["error"] = body;
+	}
+	return msg;
+}
 
 #ifndef __EMSCRIPTEN__
 
@@ -14,11 +85,11 @@ void net_poll(NetClient& client) {
 	if (!client.connected || client.ws == nullptr) return;
 
 	client.ws->poll(0);
-	client.ws->dispatch([&client](const std::string& message) {
+	client.ws->dispatchBinary([&client](const std::vector<uint8_t>& message) {
 		try {
-			client.incoming.push_back(nlohmann::json::parse(message));
-		} catch (const nlohmann::json::parse_error& e) {
-			std::cerr << "net_poll: failed to parse message: " << e.what() << std::endl;
+			client.incoming.push_back(net_unpack_response(message.data(), message.size()));
+		} catch (const std::exception& e) {
+			std::cerr << "net_poll: failed to unpack binary message: " << e.what() << std::endl;
 		}
 	});
 
@@ -29,13 +100,9 @@ void net_poll(NetClient& client) {
 
 int net_send(NetClient& client, const std::string& op, const nlohmann::json& args) {
 	int request_id = client.next_request_id++;
-	nlohmann::json request = {
-		{"id", request_id},
-		{"op", op},
-		{"args", args}
-	};
 	if (client.connected && client.ws != nullptr) {
-		client.ws->send(request.dump());
+		std::vector<uint8_t> frame = net_pack_request(static_cast<uint32_t>(request_id), op, args);
+		client.ws->sendBinary(frame);
 	}
 	return request_id;
 }
@@ -76,11 +143,14 @@ static bool on_open(int, const EmscriptenWebSocketOpenEvent*, void* user_data) {
 
 static bool on_message(int, const EmscriptenWebSocketMessageEvent* event, void* user_data) {
 	NetClient* client = static_cast<NetClient*>(user_data);
-	if (!event->isText) return true;
-	std::string message(reinterpret_cast<const char*>(event->data), event->numBytes);
 	try {
-		client->incoming.push_back(nlohmann::json::parse(message));
-	} catch (const nlohmann::json::parse_error& e) {
+		if (!event->isText) {
+			client->incoming.push_back(net_unpack_response(event->data, event->numBytes));
+		} else {
+			std::string message(reinterpret_cast<const char*>(event->data), event->numBytes);
+			client->incoming.push_back(nlohmann::json::parse(message));
+		}
+	} catch (const std::exception& e) {
 		std::cerr << "net_poll: failed to parse message: " << e.what() << std::endl;
 	}
 	return true;
@@ -123,13 +193,9 @@ void net_poll(NetClient&) {
 
 int net_send(NetClient& client, const std::string& op, const nlohmann::json& args) {
 	int request_id = client.next_request_id++;
-	nlohmann::json request = {
-		{"id", request_id},
-		{"op", op},
-		{"args", args}
-	};
 	if (client.connected && client.ws != 0) {
-		emscripten_websocket_send_utf8_text(client.ws, request.dump().c_str());
+		std::vector<uint8_t> frame = net_pack_request(static_cast<uint32_t>(request_id), op, args);
+		emscripten_websocket_send_binary(client.ws, frame.data(), static_cast<uint32_t>(frame.size()));
 	}
 	return request_id;
 }

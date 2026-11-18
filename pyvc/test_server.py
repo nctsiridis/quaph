@@ -179,3 +179,32 @@ def test_malformed_request_is_bad_request(quaph_server):
     resp = quaph_server.dispatch({"id": 2, "op": "not-a-real-op", "args": {}})
     assert resp["ok"] is False
     assert resp["error"]["type"] == "BadRequest"
+
+
+def test_binary_protocol_roundtrip(quaph_server):
+    import protocol
+
+    # Verify all 8 operations map cleanly to 1-byte opcodes 0x01..0x08
+    assert len(protocol.OPS) == 8
+    for idx, op in enumerate(protocol.OPS, start=1):
+        assert protocol.OP_TO_CODE[op] == idx
+        assert protocol.CODE_TO_OP[idx] == op
+
+    # Encode a create_project request into binary [4B id][1B opcode][msgpack]
+    req = _req(42, "create_project", project_id="binproj", full_name="Nico", email="nico@example.com")
+    raw_req = protocol.encode_request(req)
+    assert raw_req[:4] == (42).to_bytes(4, "big")
+    assert raw_req[4] == protocol.OP_TO_CODE["create_project"]
+
+    decoded_req = protocol.decode_request(raw_req)
+    assert decoded_req == req
+
+    resp = quaph_server.dispatch(decoded_req)
+    raw_resp = protocol.encode_response(resp)
+    assert raw_resp[:4] == (42).to_bytes(4, "big")
+    assert raw_resp[4] == protocol.OP_TO_CODE["create_project"]
+    assert raw_resp[5] == 1  # status = ok
+
+    decoded_resp = protocol.decode_response(raw_resp)
+    assert decoded_resp == resp
+

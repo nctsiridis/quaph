@@ -139,17 +139,24 @@ class QuaphServer:
 
     async def handle(self, websocket):
         async for raw in websocket:
+            is_binary = isinstance(raw, (bytes, bytearray))
             try:
-                request = json.loads(raw)
-            except json.JSONDecodeError as e:
-                await websocket.send(
-                    json.dumps(
-                        self._error(None, None, protocol.ErrorType.BAD_REQUEST, str(e))
-                    )
-                )
+                if is_binary:
+                    request = protocol.decode_request(raw)
+                else:
+                    request = json.loads(raw)
+            except Exception as e:
+                err_resp = self._error(None, None, protocol.ErrorType.BAD_REQUEST, str(e))
+                if is_binary:
+                    await websocket.send(protocol.encode_response(err_resp))
+                else:
+                    await websocket.send(json.dumps(err_resp))
                 continue
             response = self.dispatch(request)
-            await websocket.send(json.dumps(response))
+            if is_binary:
+                await websocket.send(protocol.encode_response(response))
+            else:
+                await websocket.send(json.dumps(response))
 
 
 async def main():
